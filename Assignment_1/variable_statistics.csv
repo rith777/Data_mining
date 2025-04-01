@@ -1,0 +1,20 @@
+Variable,Type,Records,Missing (%),Min,Max,Mean,Median,Std Dev,Unique Values,Most Frequent
+mood,Categorical,5641,0.0,-,-,-,-,-,10,7.0
+circumplex.arousal,Categorical,5597,0.8,-,-,-,-,-,5,1.0
+circumplex.valence,Categorical,5487,2.8,-,-,-,-,-,5,1.0
+activity,Continuous,22965,0.0,0.0,1.0,0.12,0.02,0.19,1868,-
+screen,Continuous,96578,0.0,0.0350000858306885,9867.00699996948,75.34,20.04,253.82,64646,-
+call,Categorical,5239,0.0,-,-,-,-,-,1,1.0
+sms,Categorical,1798,0.0,-,-,-,-,-,1,1.0
+appCat.builtin,Continuous,91288,0.0,-82798.871,33960.246,18.54,4.04,415.99,23237,-
+appCat.communication,Continuous,74276,0.0,0.006,9830.777,43.34,16.23,128.91,39890,-
+appCat.entertainment,Continuous,27125,0.0,-0.011,32148.677,37.58,3.39,262.96,12575,-
+appCat.finance,Continuous,939,0.0,0.131,355.513,21.76,8.03,39.22,729,-
+appCat.game,Continuous,813,0.0,1.003,5491.793,128.39,43.17,327.15,792,-
+appCat.office,Continuous,5642,0.0,0.003,32708.818,22.58,3.11,449.60,3178,-
+appCat.other,Continuous,7650,0.0,0.014,3892.038,25.81,10.03,112.78,5014,-
+appCat.social,Continuous,19145,0.0,0.094,30000.906,72.40,28.47,261.55,14660,-
+appCat.travel,Continuous,2846,0.0,0.08,10452.615,45.73,18.14,246.11,2606,-
+appCat.unknown,Continuous,939,0.0,0.111,2239.937,45.55,17.19,119.40,846,-
+appCat.utilities,Continuous,2487,0.0,0.246,1802.649,18.54,8.03,60.96,1732,-
+appCat.weather,Continuous,255,0.0,1.003,344.863,20.15,15.12,24.94,250,-

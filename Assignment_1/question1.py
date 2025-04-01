@@ -3,68 +3,156 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from datetime import datetime
-# conda activate datamining_env
+import os
+# command for me please do not delete: conda activate datamining_env
+# Configuration
+PLOT_DIR = 'plots'
+os.makedirs(PLOT_DIR, exist_ok=True)
 
-# Load the dataset
-df = pd.read_csv('dataset_mood_smartphone.csv', parse_dates=['time'])
 
-# Basic Dataset Properties
-print("Basic Dataset Properties")
-print(f"Total records: {len(df)}")
-print(f"Unique patients: {df['id'].nunique()}")
-print(f"Time range: {df['time'].min()} to {df['time'].max()}")
-print(f"Unique variables: {df['variable'].unique()}")
+# Load and prepare data
+def load_data(filepath):
+    """Load and preprocess the dataset"""
+    df = pd.read_csv(filepath, parse_dates=['time'])
+    df['date'] = df['time'].dt.date
+    df['day_of_week'] = df['time'].dt.day_name()
+    df['hour'] = df['time'].dt.hour
+    return df
 
-# Data Quality Check
-print("\nMissing Values")
-print(df.isnull().sum())
 
-# Value Distribution for Each Variable
-print("\nValue Distributions")
-for var in df['variable'].unique():
-    var_data = df[df['variable'] == var]['value']
-    print(f"\nVariable: {var}")
-    print(var_data.describe())
+# Dataset summary statistics
+def get_dataset_summary(df):
+    """Generate overall dataset statistics"""
+    return {
+        'Total Records': len(df),
+        'Unique Patients': df['id'].nunique(),
+        'Time Range Start': df['time'].min(),
+        'Time Range End': df['time'].max(),
+        'Total Variables': df['variable'].nunique(),
+        'Total Missing Values': df['value'].isna().sum(),
+        'Missing Percentage': f"{df['value'].isna().mean() * 100:.1f}%",
+        'Recording Days': df['date'].nunique(),
+        'Avg Records per Day': f"{len(df) / df['date'].nunique():.1f}"
+    }
 
-    # Plot histograms for continuous variables
-    if var_data.nunique() > 10:
-        plt.figure()
-        sns.histplot(var_data.dropna(), bins=20)
-        plt.title(f'Distribution of {var}')
-        plt.show()
-    else:
-        plt.figure()
-        var_data.value_counts().sort_index().plot(kind='bar')
-        plt.title(f'Counts of {var} values')
-        plt.show()
 
-# Temporal Analysis
-print("\n=== Temporal Analysis ===")
-df['date'] = df['time'].dt.date
-daily_counts = df.groupby('date').size()
-plt.figure(figsize=(12, 6))
-daily_counts.plot()
-plt.title('Number of Records per Day')
-plt.ylabel('Count')
-plt.show()
+# Variable-level statistics
+def get_variable_stats(df):
+    """Generate detailed statistics for each variable"""
+    stats = []
+    for var in df['variable'].unique():
+        var_data = df[df['variable'] == var]['value'].dropna()
+        is_continuous = var_data.nunique() > 10
 
-# Mood Analysis (assuming mood is the key variable)
-mood_data = df[df['variable'] == 'mood']
-daily_mood = mood_data.groupby('date')['value'].mean()
-plt.figure(figsize=(12, 6))
-daily_mood.plot()
-plt.title('Daily Average Mood')
-plt.ylabel('Mood Score (1-10)')
-plt.show()
+        stats.append({
+            'Variable': var,
+            'Type': 'Continuous' if is_continuous else 'Categorical',
+            'Records': len(var_data),
+            'Missing (%)': f"{(1 - len(var_data) / len(df[df['variable'] == var])) * 100:.1f}",
+            'Min': var_data.min() if is_continuous else '-',
+            'Max': var_data.max() if is_continuous else '-',
+            'Mean': f"{var_data.mean():.2f}" if is_continuous else '-',
+            'Median': f"{var_data.median():.2f}" if is_continuous else '-',
+            'Std Dev': f"{var_data.std():.2f}" if is_continuous else '-',
+            'Unique Values': var_data.nunique(),
+            'Most Frequent': var_data.mode().values[0] if not is_continuous else '-'
+        })
+    return pd.DataFrame(stats)
 
-# Correlation between variables (pivot to wide format)
-pivot_df = df.pivot_table(index=['id', 'time'], columns='variable', values='value').reset_index()
-correlation_matrix = pivot_df.corr(numeric_only=True)
-plt.figure(figsize=(10, 8))
-sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', center=0)
-plt.title('Correlation Matrix Between Variables')
-plt.show()
 
-# Save summary statistics to CSV for reporting
-summary_stats = df.groupby('variable')['value'].describe()
-summary_stats.to_csv('variable_summary_stats.csv')
+# Visualization functions
+def plot_distributions(df, variables, plot_dir=PLOT_DIR):
+    """Plot distributions for all variables"""
+    for var in variables:
+        var_data = df[df['variable'] == var]['value'].dropna()
+        plt.figure(figsize=(10, 5))
+
+        if var_data.nunique() > 10:
+            sns.histplot(var_data, bins=20, kde=True)
+            plt.title(f'Distribution of {var}\n(Skewness: {var_data.skew():.2f})')
+        else:
+            value_counts = var_data.value_counts().sort_index()
+            sns.barplot(x=value_counts.index, y=value_counts.values)
+            plt.title(f'Value Counts for {var}')
+
+        plt.xlabel('Value')
+        plt.ylabel('Count')
+        plt.tight_layout()
+        plt.savefig(f'{plot_dir}/distribution_{var}.png')
+        plt.close()
+
+
+def plot_correlations(df, numeric_vars, plot_dir=PLOT_DIR):
+    """Plot correlation matrix for numeric variables"""
+    pivot_df = df[df['variable'].isin(numeric_vars)].pivot_table(
+        index=['id', 'time'], columns='variable', values='value')
+
+    plt.figure(figsize=(12, 10))
+    corr_matrix = pivot_df.corr()
+    mask = np.triu(np.ones_like(corr_matrix, dtype=bool))
+    sns.heatmap(corr_matrix, mask=mask, annot=True, cmap='coolwarm',
+                center=0, fmt='.2f', annot_kws={'size': 8})
+    plt.title('Correlation Between Continuous Variables', pad=20)
+    plt.tight_layout()
+    plt.savefig(f'{plot_dir}/correlation_matrix.png')
+    plt.close()
+
+
+def plot_temporal_patterns(df, target_var='mood', plot_dir=PLOT_DIR):
+    """Plot temporal patterns for target variable"""
+    target_data = df[df['variable'] == target_var].copy()
+
+    # Daily patterns
+    plt.figure(figsize=(12, 5))
+    daily_avg = target_data.groupby('date')['value'].mean()
+    plt.plot(daily_avg.index, daily_avg.values)
+    plt.title(f'Daily Average {target_var.capitalize()} Trend')
+    plt.xlabel('Date')
+    plt.ylabel(f'{target_var.capitalize()} Score')
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(f'{plot_dir}/daily_{target_var}_trend.png')
+    plt.close()
+
+    # Weekly patterns
+    plt.figure(figsize=(12, 5))
+    sns.boxplot(x='day_of_week', y='value', data=target_data,
+                order=['Monday', 'Tuesday', 'Wednesday', 'Thursday',
+                       'Friday', 'Saturday', 'Sunday'])
+    plt.title(f'{target_var.capitalize()} Distribution by Day of Week')
+    plt.xlabel('Day of Week')
+    plt.ylabel(f'{target_var.capitalize()} Score')
+    plt.tight_layout()
+    plt.savefig(f'{plot_dir}/weekly_{target_var}_pattern.png')
+    plt.close()
+
+
+# Main analysis
+def main():
+    # Load data
+    df = load_data('dataset_mood_smartphone.csv')
+
+    # Generate statistics
+    dataset_summary = pd.DataFrame([get_dataset_summary(df)]).T
+    variable_stats = get_variable_stats(df)
+
+    # Save statistics
+    dataset_summary.to_csv('dataset_overview.csv', header=False)
+    variable_stats.to_csv('variable_statistics.csv', index=False)
+
+    # Generate visualizations
+    numeric_vars = variable_stats[variable_stats['Type'] == 'Continuous']['Variable']
+    plot_distributions(df, df['variable'].unique())
+    plot_correlations(df, numeric_vars)
+    plot_temporal_patterns(df)
+
+    # Print summary
+    print("=== Dataset Overview ===")
+    print(dataset_summary.to_markdown())
+
+    print("\n=== Variable Statistics ===")
+    print(variable_stats.to_markdown(index=False))
+
+
+if __name__ == '__main__':
+    main()
