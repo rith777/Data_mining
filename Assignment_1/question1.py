@@ -84,11 +84,28 @@ def plot_distributions(df, variables, plot_dir=PLOT_DIR):
 
 def plot_correlations(df, numeric_vars, plot_dir=PLOT_DIR):
     """Plot correlation matrix for numeric variables"""
-    pivot_df = df[df['variable'].isin(numeric_vars)].pivot_table(
-        index=['id', 'time'], columns='variable', values='value')
+    print(f"Original numeric_vars: {numeric_vars}")
 
-    plt.figure(figsize=(12, 10))
+    filtered_df = df[df['variable'].isin(numeric_vars)]
+    print(f"Unique variables after filtering: {filtered_df['variable'].unique()}")
+
+    pivot_df = filtered_df.pivot(index=['id', 'time'], columns='variable', values='value')
+
+    print(f"Columns in pivoted DataFrame: {pivot_df.columns.tolist()}")
+    print(f"Shape of pivoted DataFrame: {pivot_df.shape}")
+
+    missing_vars = set(numeric_vars) - set(pivot_df.columns)
+    if missing_vars:
+        print(f"Warning: Missing variables in pivoted data: {missing_vars}")
+
+    # Calculate correlations
     corr_matrix = pivot_df.corr()
+    # Check the correlation matrix
+    print("Correlation matrix:")
+    print(corr_matrix)
+
+    # Plotting
+    plt.figure(figsize=(12, 10))
     mask = np.triu(np.ones_like(corr_matrix, dtype=bool))
     sns.heatmap(corr_matrix, mask=mask, annot=True, cmap='coolwarm',
                 center=0, fmt='.2f', annot_kws={'size': 8})
@@ -96,7 +113,6 @@ def plot_correlations(df, numeric_vars, plot_dir=PLOT_DIR):
     plt.tight_layout()
     plt.savefig(f'{plot_dir}/correlation_matrix.png')
     plt.close()
-
 
 def plot_temporal_patterns(df, target_var='mood', plot_dir=PLOT_DIR):
     """Plot temporal patterns for target variable"""
