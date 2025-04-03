@@ -32,19 +32,12 @@ def ensure_correct_data_types(df):
 
     return df
 
-
 def clean_data(df):
     unique_ids = df['id'].unique()
     id_to_int = {id_val: i+1 for i, id_val in enumerate(unique_ids)}
     print("Id to int mapping: ", id_to_int)
     
-    unique_vars = df['variable'].unique()
-    var_to_int = {var: i+1 for i, var in enumerate(unique_vars)}
-    print("var to int mapping: ", var_to_int)
-
     df['id_int'] = df['id'].map(id_to_int)
-    df['variable_int'] = df['variable'].map(var_to_int)
-
     df['year'] = df['time'].dt.year
     df['month'] = df['time'].dt.month
     df['day'] = df['time'].dt.day
@@ -60,9 +53,11 @@ def clean_data(df):
     # look at function above, we can change definition based on the if statements
     df['time_of_day'] = df['hour'].apply(get_time_of_day)
 
+    df['is_weekend'] = df['day_of_week'].apply(lambda x: 1 if x >= 6 else 0)
+
     # Drop year? all is 2014 so its useless:
-    df = df.drop(['id', 'variable', 'time', 'Unnamed: 0', 'year'], axis=1, errors='ignore')
-    df = df.rename(columns={'id_int': 'id', 'variable_int': 'variable'})
+    df = df.drop(['id', 'time', 'Unnamed: 0', 'year'], axis=1, errors='ignore')
+    df = df.rename(columns={'id_int': 'id'})
 
     df = ensure_correct_data_types(df)
 
@@ -124,6 +119,7 @@ def main():
     print(f"Missing values by id: {df[df['value'].isna()].groupby('id').size()}")
 
     no_missing_data_df_knn = deal_with_missing_data(cleaned_df)
+    no_missing_data_df_knn = pd.get_dummies(no_missing_data_df_knn, columns=['variable'], prefix='variable') # One hot encoding variable
     no_missing_data_df_knn.to_csv(folder_path + "/cleaned_without_missing.csv", index=False)
 
     print(no_missing_data_df_knn.describe)
