@@ -82,7 +82,7 @@ def deal_with_missing_data(df):
     result_df = pd.concat(missing_data_dfs)
     result_df.reset_index(drop=True, inplace=True)
 
-    result_df = ensure_correct_data_types(df)
+    result_df = ensure_correct_data_types(result_df)
 
     return result_df
 
