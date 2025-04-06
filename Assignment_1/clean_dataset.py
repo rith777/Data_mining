@@ -63,6 +63,47 @@ def clean_data(df):
 
     return df
 
+
+def create_temporal_features(df, window_size='5D'):
+    """
+    Transforms raw time-series into a prediction-ready dataset with:
+    - Features aggregated from 5-day windows
+    - Targets aligned to next-day values
+    """
+    # Filter only mood data
+    mood_df = df[df['variable_mood'] == 1].copy()
+    mood_df = mood_df.sort_values(['id', 'datetime'])
+
+    # Initialize feature storage
+    features = []
+
+    # Process each patient separately
+    for patient_id, patient_data in mood_df.groupby('id'):
+        patient_data = patient_data.set_index('datetime')
+
+        # 5-day window
+        patient_data['mood_5day_mean'] = patient_data['value'].rolling(window_size).mean()
+        patient_data['mood_5day_std'] = patient_data['value'].rolling(window_size).std()
+
+        # Lag features
+        for lag in [1, 2, 3]:
+            patient_data[f'mood_lag_{lag}'] = patient_data['value'].shift(lag)
+
+        # Time-based features
+        patient_data['target_mood'] = patient_data['value'].shift(-1)  
+
+        # Store results
+        features.append(patient_data.reset_index())
+
+    # Combine all patients
+    temporal_df = pd.concat(features)
+    temporal_df = temporal_df.dropna()
+    keep_cols = ['id', 'datetime', 'mood_5day_mean', 'mood_5day_std',
+                 'mood_lag_1', 'mood_lag_2', 'mood_lag_3',
+                 'day_of_week', 'time_of_day', 'is_weekend', 'target_mood']
+
+    return temporal_df[keep_cols]
+
 # https://medium.com/@piyushkashyap045/handling-missing-values-in-data-a-beginner-guide-to-knn-imputation-30d37cc7a5b7
 def deal_with_missing_data(df):
     # Calculate neighbours: (i just used 10 but we need to search which one is actually best based on our dataset)
@@ -127,6 +168,13 @@ def main():
     print(f"Missing values by id: {no_missing_data_df_knn[no_missing_data_df_knn['value'].isna()].groupby('id').size()}")
 
     plot_corr_diagram(no_missing_data_df_knn)
+
+    temporal_df = create_temporal_features(no_missing_data_df_knn)
+
+    # Save results
+    temporal_df.to_csv(folder_path + "/temporal_features_5day.csv", index=False)
+    print("Temporal features saved. Sample:")
+    print(temporal_df.head())
 
 if __name__ == '__main__':
     main()
