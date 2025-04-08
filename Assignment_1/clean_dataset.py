@@ -127,10 +127,78 @@ def deal_with_missing_data(df):
 
     return result_df
 
+def handle_outliers(df):
+    result_dfs = []
+    
+    var_stats = {}
+    for var, group in df.groupby('variable'):
+        var_stats[var] = {
+            'median': group['value'].median(),
+            'iqr': group['value'].quantile(0.75) - group['value'].quantile(0.25),
+            'min': group['value'].min(),
+            'max': group['value'].max()
+        }
+        
 
-# Part of feature engineering
-def handle_outliers():
-    pass
+        unique_vals = group['value'].nunique()
+        total_vals = len(group)
+        var_stats[var]['is_discrete'] = (unique_vals / total_vals < 0.05) or (unique_vals < 10)
+    
+    for (id_val, var), group in df.groupby(['id', 'variable']):
+        if len(group) <= 1:
+            result_dfs.append(group)
+            continue
+            
+        is_discrete = var_stats[var]['is_discrete']
+        
+        if is_discrete:
+            
+            median = group['value'].median()
+
+            q1 = group['value'].quantile(0.25)
+            q3 = group['value'].quantile(0.75)
+            iqr = q3 - q1
+            
+
+            lower_bound = q1 - 2.5 * iqr if iqr > 0 else q1 - 1
+            upper_bound = q3 + 2.5 * iqr if iqr > 0 else q3 + 1
+            
+            outliers = (group['value'] < lower_bound) | (group['value'] > upper_bound)
+            group.loc[outliers, 'value'] = median
+            
+        else:
+            group = group.sort_values('datetime')
+            
+            
+            window_size = max(5, len(group) // 10)
+            
+            
+            group['rolling_median'] = group['value'].rolling(window=window_size, min_periods=1).median()
+            group['rolling_q1'] = group['value'].rolling(window=window_size, min_periods=1).quantile(0.25)
+            group['rolling_q3'] = group['value'].rolling(window=window_size, min_periods=1).quantile(0.75)
+            group['rolling_iqr'] = group['rolling_q3'] - group['rolling_q1']
+            
+            
+            group['rolling_iqr'] = group['rolling_iqr'].fillna(var_stats[var]['iqr'])
+            
+            
+            group['lower_bound'] = group['rolling_median'] - 1.5 * group['rolling_iqr']
+            group['upper_bound'] = group['rolling_median'] + 1.5 * group['rolling_iqr']
+            
+            
+            outliers = (group['value'] < group['lower_bound']) | (group['value'] > group['upper_bound'])
+            
+        
+            group.loc[outliers, 'value'] = group.loc[outliers, 'rolling_median']
+            
+            group = group.drop(['rolling_median', 'rolling_q1', 'rolling_q3', 'rolling_iqr', 
+                               'lower_bound', 'upper_bound'], axis=1)
+        
+        result_dfs.append(group)
+    
+    result_df = pd.concat(result_dfs)
+    return result_df.sort_index()
+
 
 # Part of feature engineering
 def normalize_or_scale():
@@ -138,11 +206,26 @@ def normalize_or_scale():
 
 # Doesnt show much correlation
 def plot_corr_diagram(df):
-    corr_matrix = df.corr()
+    plot_df = df.copy()
+    
+    non_numeric_cols = []
+    for col in plot_df.columns:
+        if plot_df[col].dtype == 'object' or plot_df[col].dtype == 'datetime64[ns]':
+            non_numeric_cols.append(col)
+    
+    if non_numeric_cols:
+        print(f"Dropping non-numeric columns for correlation analysis: {non_numeric_cols}")
+        plot_df = plot_df.drop(columns=non_numeric_cols)
+    
+    corr_matrix = plot_df.corr()
 
-    plt.figure(figsize=(10, 8))
-    sns.heatmap(corr_matrix, annot=True, cmap="coolwarm", fmt=".2f", linewidths=0.5)
+    plt.figure(figsize=(12, 10))
+    sns.heatmap(corr_matrix, annot=True, cmap="coolwarm", fmt=".2f", 
+                linewidths=0.5, annot_kws={"size": 8})
     plt.title("Correlation Matrix")
+    plt.xticks(rotation=45, ha='right')
+    plt.tight_layout()
+    print("Correlation matrix saved as 'correlation_matrix.png'")
     plt.show()
 
 def main():
@@ -160,17 +243,13 @@ def main():
     print(f"Missing values by id: {df[df['value'].isna()].groupby('id').size()}")
 
     no_missing_data_df_knn = deal_with_missing_data(cleaned_df)
-    no_missing_data_df_knn = pd.get_dummies(no_missing_data_df_knn, columns=['variable'], prefix='variable') # One hot encoding variable
-    no_missing_data_df_knn.to_csv(folder_path + "/cleaned_without_missing.csv", index=False)
-
-    print(no_missing_data_df_knn.describe)
-    print(f"Missing values per column: \n{no_missing_data_df_knn.isnull().sum()}\n")
-    print(f"Missing values by id: {no_missing_data_df_knn[no_missing_data_df_knn['value'].isna()].groupby('id').size()}")
-
+    no_outliers_df = handle_outliers(no_missing_data_df_knn)
+    final_df = pd.get_dummies(no_outliers_df, columns=['variable'], prefix='variable') # One hot encoding variable
+    final_df.to_csv(folder_path + "/cleaned_without_missing.csv", index=False)
+    
     plot_corr_diagram(no_missing_data_df_knn)
 
-    temporal_df = create_temporal_features(no_missing_data_df_knn)
-
+    temporal_df = create_temporal_features(final_df)
     # Save results
     temporal_df.to_csv(folder_path + "/temporal_features_5day.csv", index=False)
     print("Temporal features saved. Sample:")
