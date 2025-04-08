@@ -151,7 +151,7 @@ def main():
     print("Temporal features saved. Sample:")
     print(temporal_df.head())
 
-    temporal_df = discretize_mood(temporal_df)
+    temporal_df['mood_class'] = temporal_df['target_mood'].apply(discretize_mood)
     temporal_df.to_csv(folder_path + "/temporal_features_5day_class.csv", index=False)
 
     # Random Forest training (use the below vars to evaluate later)
